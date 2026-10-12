@@ -259,11 +259,11 @@ function createApp(opts = {}) {
 
   // ---- Site
   const pub = opts.publicDir || path.join(__dirname, 'public');
-  app.use(express.static(pub, { index: 'index.html', maxAge: isProd ? '5m' : 0 }));
+  app.use(express.static(pub, { index: 'index.html', maxAge: 0, setHeaders: res => res.setHeader('Cache-Control', 'no-cache') }));
   app.get('/:username', (req, res, next) => {
     const u = req.params.username.toLowerCase();
     if (!USER_RE.test(u) || RESERVED.has(u)) return next();
-    res.sendFile(path.join(pub, 'index.html'));
+    res.set('Cache-Control', 'no-cache').sendFile(path.join(pub, 'index.html'));
   });
   app.use('/api', (req, res) => err(res, 404, 'Rota não encontrada.'));
   app.use((e, req, res, next) => {
