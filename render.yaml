@@ -1,0 +1,21 @@
+# Blueprint do Render: cria o serviço web e a base de dados PostgreSQL.
+services:
+  - type: web
+    name: kwanzalink
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kwanzalink-db
+          property: connectionString
+      - key: ADMIN_EMAIL
+        sync: false
+databases:
+  - name: kwanzalink-db
+    plan: basic-256mb
