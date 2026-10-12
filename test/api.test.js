@@ -22,6 +22,7 @@ after(async () => { srv.close(); await pool.end(); });
 test('registo, sessão e username/e-mail duplicados', async () => {
   const r = await reg('ana@x.pt', 'ana_s'); assert.equal(r.s, 201); assert.equal(r.j.email, 'ana@x.pt');
   assert.match(r.h.get('set-cookie'), /HttpOnly/);
+  const pg0 = await call('GET', '/api/public/ana_s', null, 'anon'); assert.equal(pg0.s, 200, 'página pública existe logo após o registo');
   assert.equal((await reg('ana@x.pt', 'outro_u', 'Criador', 'z')).s, 409);
   const d = await reg('b@x.pt', 'ana_s', 'Criador', 'z'); assert.equal(d.s, 409); assert.match(d.j.error, /username/);
   assert.equal((await reg('c@x.pt', 'admin', 'Criador', 'z')).s, 400);

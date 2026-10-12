@@ -79,6 +79,14 @@ function createApp(opts = {}) {
   const admin = (req, res, next) => req.user.role === 'admin' ? next() : err(res, 403, 'Acesso restrito à administração.');
   const audit = (actor, action, detail = {}) => pool.query('insert into audit_log(actor,action,detail) values($1,$2,$3)', [actor, action, detail]).catch(() => {});
   const str = (v, n) => String(v ?? '').trim().slice(0, n);
+  async function ensureSnapshot(u) {
+    const has = await pool.query('select 1 from public_pages where username=$1', [u.username]);
+    if (has.rowCount) return;
+    const p = (u.doc && u.doc.page) || {};
+    const blocks = (p.blocks || []).filter(b => !b.h && (b.l || b.t === 'wa')).slice(0, 40);
+    const wa = String((blocks.find(b => b.t === 'wa') || {}).u || '').replace(/\D/g, '');
+    await pool.query('insert into public_pages(username,snapshot) values($1,$2) on conflict do nothing', [u.username, { page: { ...p, blocks, wa, catalog: [] }, mk: { n: p.name, u: u.username, c: p.city, w: wa, m: {} } }]);
+  }
   const out = u => ({ email: u.email, type: u.type, role: u.role, doc: { ...u.doc, type: u.type } });
 
   app.get('/healthz', wrap(async (req, res) => { await pool.query('select 1'); res.json({ ok: true }); }));
@@ -110,6 +118,7 @@ function createApp(opts = {}) {
       if (e.code === '23505') return err(res, 409, e.constraint && e.constraint.includes('username') ? 'Este username já está em uso.' : 'Este e-mail já tem conta.');
       throw e;
     }
+    await ensureSnapshot(u);
     await newSession(res, u.id);
     audit(email, 'register', { username });
     res.status(201).json(out(u));
@@ -122,6 +131,7 @@ function createApp(opts = {}) {
     if (!ok) return err(res, 401, 'E-mail ou palavra-passe incorretos.');
     if (u.suspended) return err(res, 403, 'Esta conta está suspensa. Contacte a equipa.');
     if (email === adminEmail && u.role !== 'admin') { await pool.query("update users set role='admin' where id=$1", [u.id]); u.role = 'admin'; }
+    await ensureSnapshot(u);
     await newSession(res, u.id);
     res.json(out(u));
   }));
@@ -131,6 +141,7 @@ function createApp(opts = {}) {
     res.clearCookie('kl_sid', { path: '/' }).json({ ok: true });
   }));
   app.get('/api/me', auth, wrap(async (req, res) => {
+    await ensureSnapshot(req.user);
     const inbox = (await pool.query('select id,kind,data,created_at from inbox where owner_id=$1 and delivered_at is null order by created_at limit 200', [req.user.id])).rows;
     res.set('Cache-Control', 'no-store').json({ ...out(req.user), inbox });
   }));
